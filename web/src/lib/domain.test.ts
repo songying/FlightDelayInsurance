@@ -3,6 +3,7 @@ import {
   FlightStatus,
   Outcome,
   checkPremium,
+  formatLocal,
   isValidFlightNumber,
   maxPremium,
   outcomeFor,
@@ -150,5 +151,14 @@ describe("input parsing", () => {
     expect(zonedLocalToUtcSeconds("2026-01-15T10:00", "Europe/London")).toBe(BigInt(Date.UTC(2026, 0, 15, 10) / 1000));
     expect(zonedLocalToUtcSeconds("2026-07-15T10:00", "Europe/London")).toBe(BigInt(Date.UTC(2026, 6, 15, 9) / 1000));
     expect(zonedLocalToUtcSeconds("bad", "UTC")).toBeNull();
+  });
+});
+
+describe("formatLocal", () => {
+  // Regression: dateStyle/timeStyle combined with timeZoneName throws "TypeError: Invalid option".
+  it("formats a departure with a time zone name without throwing", () => {
+    const s = formatLocal(1_800_000_000n);
+    expect(s).toMatch(/2027/);
+    expect(s).toMatch(/\d{1,2}:\d{2}/);
   });
 });

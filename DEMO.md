@@ -72,12 +72,12 @@ chain time shown in the Demo panel.
 
 1. **Demo account → Insurer (#0)**. Open **Insurer**.
 2. Fill in **Create offer**:
-   - Flight number: `SQ8385` (use a different one per scenario if you like, e.g. `SQ8386`)
+   - Flight number: leave blank for `SQ8385` (or type another, e.g. `SQ8386`)
    - Scheduled departure: a date **at least 1 day after the Demo panel's chain time**, e.g. 10:00
    - Airport time zone: `UTC`
    - Payout odds: `5.00`
    - Business-class full fare cap: `1`
-   - Oracle address: Anvil's *Available Accounts* (2) (shown in the Demo account list as *Oracle (#2)*)
+   - Oracle address: leave blank for Anvil's *Available Accounts* (2), shown in the Demo account list as *Oracle (#2)*
    - Initial collateral: `10`
 3. Click **Create offer** and wait for **✓ confirmed**.
 4. In the Demo panel, pick the new offer in **Offer**. Its cutoff, departure and report deadline appear.

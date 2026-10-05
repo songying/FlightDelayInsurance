@@ -50,6 +50,26 @@ export function demoAccounts(env: Record<string, string | undefined>): DemoAccou
 export const demoModeEnabled = (chainId: number | undefined, accounts: readonly DemoAccount[]) =>
   chainId === DEMO_CHAIN_ID && accounts.length > 0;
 
+export const DEMO_DEFAULT_FLIGHT = "SQ8385";
+
+export type OfferTextFields = { flightNumber: string; oracle: string };
+export type DemoOfferDefaults = { flightNumber: string; oracle?: `0x${string}` };
+
+/** Create-offer defaults in demo mode: flight SQ8385 and, if configured, Anvil #2 as oracle. */
+export function demoOfferDefaults(accounts: readonly DemoAccount[]): DemoOfferDefaults {
+  const oracle = accounts.find((a) => a.role === "oracle")?.address;
+  return oracle ? { flightNumber: DEMO_DEFAULT_FLIGHT, oracle } : { flightNumber: DEMO_DEFAULT_FLIGHT };
+}
+
+/** Fills blank fields from the demo defaults. Pass null outside demo mode to change nothing. */
+export function withDemoDefaults(input: OfferTextFields, defaults: DemoOfferDefaults | null): OfferTextFields {
+  if (!defaults) return input;
+  return {
+    flightNumber: input.flightNumber.trim() || defaults.flightNumber,
+    oracle: input.oracle.trim() || defaults.oracle || "",
+  };
+}
+
 /** Seconds to advance so that chain time reaches `target`; 0 if it already has (time never goes back). */
 export const secondsUntil = (target: bigint, now: bigint) => (target > now ? target - now : 0n);
 
