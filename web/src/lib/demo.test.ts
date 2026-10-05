@@ -9,8 +9,11 @@ import {
   ONE_HOUR,
   demoAccounts,
   demoClock,
+  DEMO_DEFAULT_FLIGHT,
   demoModeEnabled,
+  demoOfferDefaults,
   secondsUntil,
+  withDemoDefaults,
 } from "./demo";
 
 // Keys are generated per run: no private key is written into this repository.
@@ -146,5 +149,28 @@ describe("demo mode guard", () => {
 
   it("is off when no demo keys are configured", () => {
     expect(demoModeEnabled(31337, [])).toBe(false);
+  });
+});
+
+describe("demo offer defaults", () => {
+  it("defaults the flight to SQ8385 and the oracle to Anvil #2", () => {
+    const d = demoOfferDefaults(demoAccounts(env));
+    expect(DEMO_DEFAULT_FLIGHT).toBe("SQ8385");
+    expect(d).toEqual({ flightNumber: "SQ8385", oracle: privateKeyToAccount(k2).address });
+  });
+
+  it("has no oracle default when the oracle key is not configured", () => {
+    expect(demoOfferDefaults(demoAccounts({ [DEMO_KEY_VARS.insurer]: k0 }))).toEqual({ flightNumber: "SQ8385" });
+  });
+
+  it("fills only blank fields", () => {
+    const d = demoOfferDefaults(demoAccounts(env));
+    expect(withDemoDefaults({ flightNumber: "", oracle: "  " }, d)).toEqual(d);
+    const typed = { flightNumber: "SQ8386", oracle: privateKeyToAccount(k1).address };
+    expect(withDemoDefaults(typed, d)).toEqual(typed);
+  });
+
+  it("changes nothing outside demo mode", () => {
+    expect(withDemoDefaults({ flightNumber: "", oracle: "" }, null)).toEqual({ flightNumber: "", oracle: "" });
   });
 });
