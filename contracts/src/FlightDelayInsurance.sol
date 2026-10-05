@@ -14,6 +14,8 @@ contract FlightDelayInsurance {
     uint64 public constant CLAIM_WINDOW = 90 days; // 7_776_000
     uint32 public constant DELAY_THRESHOLD_MINUTES = 30;
     uint256 public constant INSURER_PUSH_GAS = 30_000;
+    /// @dev A value-bearing CALL adds this stipend on top of the gas argument.
+    uint256 private constant CALL_VALUE_STIPEND = 2_300;
     uint256 public constant MAX_FLIGHT_NUMBER_LENGTH = 8;
 
     // -------------------------------------------------------------------- types
@@ -103,7 +105,8 @@ contract FlightDelayInsurance {
     error AlreadySettled();
     error InsufficientFreeCollateral();
     error SalesAlreadyClosed();
-    error SalesNotOpen();
+    error SalesClosedByInsurer();
+    error SalesCutoffPassed();
     error InsurerOrOracleCannotBuy();
     error AlreadyHasPolicy();
     error PayoutNotAbovePremium();
@@ -139,7 +142,7 @@ contract FlightDelayInsurance {
         uint32 oddsBps,
         uint256 capWei,
         address oracle
-    ) external payable returns (uint256 offerId) {
+    ) external payable nonReentrant returns (uint256 offerId) {
         uint256 len = bytes(flightNumber).length;
         if (len == 0 || len > MAX_FLIGHT_NUMBER_LENGTH) revert InvalidFlightNumber();
         if (oddsBps <= BPS || oddsBps > MAX_ODDS_BPS) revert InvalidOdds();
@@ -163,7 +166,7 @@ contract FlightDelayInsurance {
     }
 
     /// @notice Top up an offer's collateral. Allowed any time before settlement.
-    function deposit(uint256 offerId) external payable {
+    function deposit(uint256 offerId) external payable nonReentrant {
         Offer storage o = _insurerOffer(offerId);
         if (msg.value == 0) revert ZeroAmount();
         if (o.outcome != Outcome.None) revert AlreadySettled();
@@ -183,7 +186,7 @@ contract FlightDelayInsurance {
     }
 
     /// @notice Irreversibly stop new sales. Sold policies stay in force.
-    function closeSales(uint256 offerId) external {
+    function closeSales(uint256 offerId) external nonReentrant {
         Offer storage o = _insurerOffer(offerId);
         if (o.outcome != Outcome.None) revert AlreadySettled();
         if (o.salesClosed) revert SalesAlreadyClosed();
@@ -207,9 +210,11 @@ contract FlightDelayInsurance {
     // ------------------------------------------------------------- policyholder
 
     /// @notice Buy one policy. msg.value is the premium; payout = floor(premium * oddsBps / 10_000).
-    function buyPolicy(uint256 offerId) external payable {
+    function buyPolicy(uint256 offerId) external payable nonReentrant {
         Offer storage o = _offer(offerId);
-        if (o.outcome != Outcome.None || o.salesClosed || block.timestamp > _cutoff(o)) revert SalesNotOpen();
+        if (o.outcome != Outcome.None) revert AlreadySettled();
+        if (o.salesClosed) revert SalesClosedByInsurer();
+        if (block.timestamp > _cutoff(o)) revert SalesCutoffPassed();
         if (msg.sender == o.insurer || msg.sender == o.oracle) revert InsurerOrOracleCannotBuy();
         Policy storage p = _policies[offerId][msg.sender];
         if (p.premium != 0) revert AlreadyHasPolicy();
@@ -323,11 +328,16 @@ contract FlightDelayInsurance {
         Offer storage o = _offer(offerId);
         if (o.outcome != Outcome.None || o.salesClosed || block.timestamp > _cutoff(o)) return 0;
         uint256 odds = o.oddsBps;
-        // Largest p with floor(p * odds / BPS) <= cap  <=>  p * odds < (cap + 1) * BPS
-        uint256 byCap = _largestBelow(o.capWei, odds);
+        // SPEC.md section 4: floor(cap * 10000 / odds), saturating for absurdly large caps.
+        uint256 cap = o.capWei;
+        uint256 byCap = cap <= type(uint256).max / BPS ? (cap * BPS) / odds : (cap / odds) * BPS;
         // Largest p with floor(p * (odds - BPS) / BPS) <= free  (the reservation)
         uint256 byCollateral = _largestBelow(o.collateral - o.reserved, odds - BPS);
-        return byCap < byCollateral ? byCap : byCollateral;
+        uint256 m = byCap < byCollateral ? byCap : byCollateral;
+        // B7 requires payout > premium, i.e. a reservation of at least 1 wei. The reservation is
+        // nondecreasing in the premium, so if m is below the smallest such premium, nothing is buyable.
+        uint256 minBuyable = (BPS + (odds - BPS) - 1) / (odds - BPS);
+        return m < minBuyable ? 0 : m;
     }
 
     // ----------------------------------------------------------------- internal
@@ -373,7 +383,8 @@ contract FlightDelayInsurance {
     function _payInsurer(uint256 offerId, address insurer, uint256 amount) internal {
         bool ok = true;
         if (amount != 0) {
-            uint256 gasLimit = INSURER_PUSH_GAS;
+            // The callee receives exactly INSURER_PUSH_GAS once the CALL stipend is added.
+            uint256 gasLimit = INSURER_PUSH_GAS - CALL_VALUE_STIPEND;
             assembly {
                 ok := call(gasLimit, insurer, amount, 0, 0, 0, 0)
             }
