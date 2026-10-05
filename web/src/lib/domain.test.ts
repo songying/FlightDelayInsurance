@@ -74,6 +74,32 @@ describe("maxPremium / checkPremium", () => {
   it("is zero when sales are not open", () => {
     expect(maxPremium(offer(), DEP - 43_199n)).toBe(0n);
   });
+  // The cases below mirror contracts/test/Review.t.sol (R2, R3) after the PR #9 fixes.
+  it("uses the SPEC.md cap bound floor(cap * 10000 / odds)", () => {
+    expect(maxPremium(offer({ capWei: 10n, oddsBps: 15_000, collateral: ETH }), now)).toBe(6n);
+  });
+  it("is zero when no premium is buyable", () => {
+    // 1.5x with zero collateral: every purchase needs a reservation of at least 1 wei.
+    expect(maxPremium(offer({ oddsBps: 15_000, collateral: 0n }), now)).toBe(0n);
+    // A cap of 1 wei at 1.5x: no premium pays more than itself within the cap.
+    expect(maxPremium(offer({ capWei: 1n, oddsBps: 15_000 }), now)).toBe(0n);
+  });
+  it("only ever returns a premium that passes checkPremium", () => {
+    let seed = 42;
+    const rand = (max: number) => {
+      seed = (seed * 1_103_515_245 + 12_345) % 2 ** 31;
+      return seed % max;
+    };
+    for (let i = 0; i < 2_000; i++) {
+      const o = offer({
+        oddsBps: 10_001 + rand(990_000),
+        capWei: BigInt(1 + rand(1_000_000)) * 10n ** BigInt(rand(19)),
+        collateral: BigInt(rand(1_000_000)) * 10n ** BigInt(rand(19)),
+      });
+      const m = maxPremium(o, now);
+      if (m > 0n) expect(checkPremium(o, m, now), JSON.stringify({ ...o, m }, (_, v) => (typeof v === "bigint" ? `${v}` : v))).toMatchObject({ ok: true });
+    }
+  });
 });
 
 describe("outcomeFor", () => {
