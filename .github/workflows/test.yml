@@ -1,0 +1,37 @@
+name: test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  foundry:
+    name: Foundry
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: contracts
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Check for contracts
+        id: has
+        working-directory: .
+        run: echo "contracts=$([ -f contracts/foundry.toml ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - uses: foundry-rs/foundry-toolchain@v1
+        if: steps.has.outputs.contracts == 'true'
+
+      - name: forge fmt --check
+        if: steps.has.outputs.contracts == 'true'
+        run: forge fmt --check
+
+      - name: forge build --sizes
+        if: steps.has.outputs.contracts == 'true'
+        run: forge build --sizes
+
+      - name: forge test -vvv
+        if: steps.has.outputs.contracts == 'true'
+        run: forge test -vvv

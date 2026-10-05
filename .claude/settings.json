@@ -1,0 +1,48 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(forge build:*)",
+      "Bash(forge test:*)",
+      "Bash(forge coverage:*)",
+      "Bash(forge fmt:*)",
+      "Bash(forge script:*)",
+      "Bash(npm run:*)",
+      "Bash(git status:*)",
+      "Bash(git log:*)",
+      "Bash(git diff:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git switch:*)",
+      "Bash(git branch:*)",
+      "Bash(git push origin:*)",
+      "Bash(gh issue:*)",
+      "Bash(gh pr:*)",
+      "Bash(gh run:*)",
+      "Bash(gh release:*)"
+    ],
+    "deny": [
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git push origin --force:*)",
+      "Bash(git push origin -f:*)",
+      "Bash(git push --force-with-lease:*)",
+      "Bash(git push origin --force-with-lease:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(gh repo delete:*)",
+      "Read(./.env)",
+      "Read(./web/.env.local)"
+    ]
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/run-tests.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
