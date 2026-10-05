@@ -194,10 +194,14 @@ export function formatCountdown(seconds: bigint): string {
 export const formatUtc = (secs: bigint) =>
   new Date(Number(secs) * 1000).toISOString().replace("T", " ").slice(0, 16) + " UTC";
 
+// Explicit fields, not dateStyle/timeStyle: Intl rejects those combined with timeZoneName.
 export const formatLocal = (secs: bigint) =>
   new Date(Number(secs) * 1000).toLocaleString(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
     timeZoneName: "short",
   });
 
