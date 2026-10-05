@@ -61,3 +61,6 @@ table { width: 100%; border-collapse: collapse; background: var(--card); border:
 th, td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
 th { color: var(--muted); font-weight: 500; }
 .table-wrap { overflow-x: auto; }
+.switcher { display: flex; gap: 8px; align-items: center; }
+.demo-panel { background: var(--card); border: 1px dashed var(--warn); border-radius: 10px; padding: 12px 16px; margin-bottom: 24px; }
+.demo-panel dl.kv { max-width: 520px; }

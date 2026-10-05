@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { BaseError, ContractFunctionRevertedError, type ContractFunctionName } from "viem";
-import { useWaitForTransactionReceipt, useWriteContract } from "wagmi";
+import { useAccount, usePublicClient, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
 import { fdiAbi } from "@/lib/abi";
 import { useFdiAddress } from "@/hooks/useFdi";
 
@@ -37,7 +37,11 @@ export function TxButton({
   className?: string;
 }) {
   const address = useFdiAddress();
+  const client = usePublicClient();
+  const { address: account } = useAccount();
   const { writeContract, data: hash, isPending, error, reset } = useWriteContract();
+  const [simulating, setSimulating] = useState(false);
+  const [simError, setSimError] = useState<unknown>(null);
   const receipt = useWaitForTransactionReceipt({ hash });
 
   useEffect(() => {
@@ -48,18 +52,36 @@ export function TxButton({
     }
   }, [receipt.isSuccess]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const busy = isPending || receipt.isLoading;
+  // Simulate first so a revert shows the contract's error name and no transaction is sent.
+  const send = async () => {
+    reset();
+    setSimError(null);
+    const req = { ...call, address: address!, abi: fdiAbi };
+    setSimulating(true);
+    try {
+      await client!.simulateContract({ ...req, account } as Parameters<NonNullable<typeof client>["simulateContract"]>[0]);
+    } catch (e) {
+      setSimError(e);
+      return;
+    } finally {
+      setSimulating(false);
+    }
+    writeContract(req as unknown as Write);
+  };
+
+  const busy = simulating || isPending || receipt.isLoading;
+  const err = simError ?? error ?? receipt.error;
   return (
     <span className="tx">
       <button
         className={className}
-        disabled={disabled || busy || !address}
-        onClick={() => writeContract({ ...call, address: address!, abi: fdiAbi } as unknown as Write)}
+        disabled={disabled || busy || !address || !client}
+        onClick={send}
       >
         {busy ? "Pending…" : children}
       </button>
       {receipt.isSuccess && <span className="ok">✓ confirmed</span>}
-      {(error || receipt.error) && <span className="err">{errorText(error ?? receipt.error)}</span>}
+      {err != null && <span className="err">{errorText(err)}</span>}
     </span>
   );
 }
