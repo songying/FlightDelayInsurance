@@ -892,7 +892,12 @@ export const fdiAbi = [
   },
   {
     "type": "error",
-    "name": "SalesNotOpen",
+    "name": "SalesClosedByInsurer",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "SalesCutoffPassed",
     "inputs": []
   },
   {

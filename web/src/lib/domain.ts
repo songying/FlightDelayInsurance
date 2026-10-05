@@ -79,9 +79,13 @@ const largestBelow = (limit: bigint, mul: bigint) => ((limit + 1n) * BPS - 1n) /
 export function maxPremium(o: Offer, now: bigint): bigint {
   if (phaseOf(o, now) !== "Open") return 0n;
   const odds = BigInt(o.oddsBps);
-  const byCap = largestBelow(o.capWei, odds);
+  // SPEC.md section 4 cap bound. BigInt cannot overflow, so the contract's saturation is not needed.
+  const byCap = (o.capWei * BPS) / odds;
   const byCollateral = largestBelow(freeCollateral(o), odds - BPS);
-  return byCap < byCollateral ? byCap : byCollateral;
+  const m = byCap < byCollateral ? byCap : byCollateral;
+  // payout > premium needs a reservation of at least 1 wei; below this premium nothing is buyable.
+  const minBuyable = (BPS + (odds - BPS) - 1n) / (odds - BPS);
+  return m < minBuyable ? 0n : m;
 }
 
 export type PremiumCheck = { ok: true; payout: bigint } | { ok: false; reason: string; payout: bigint };

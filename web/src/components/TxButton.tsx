@@ -13,7 +13,7 @@ type Call = {
   value?: bigint;
 };
 
-/** Prefer the contract's custom error name (e.g. "SalesNotOpen") over a generic message. */
+/** Prefer the contract's custom error name (e.g. "SalesCutoffPassed") over a generic message. */
 export function errorText(err: unknown): string {
   if (err instanceof BaseError) {
     const revert = err.walk((e) => e instanceof ContractFunctionRevertedError);
