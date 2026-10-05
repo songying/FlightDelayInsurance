@@ -6,7 +6,10 @@ import { useAccount } from "wagmi";
 import { PhaseBadge } from "@/components/Badges";
 import { Guard } from "@/components/Guard";
 import { TxButton } from "@/components/TxButton";
+import { useDemoMode } from "@/hooks/useDemoMode";
 import { useChainNow, useCredit, useOffers } from "@/hooks/useFdi";
+import { DEMO_ACCOUNTS } from "@/lib/config";
+import { demoOfferDefaults, withDemoDefaults } from "@/lib/demo";
 import {
   MAX_ODDS_BPS,
   MIN_ODDS_BPS,
@@ -83,28 +86,37 @@ function CreateOfferForm({ now, onDone }: { now: bigint; onDone: () => void }) {
   const [oracle, setOracle] = useState("");
   const [deposit, setDeposit] = useState("0");
 
+  // Demo mode only: a blank flight number or oracle falls back to SQ8385 / Anvil #2.
+  const defaults = useDemoMode() ? demoOfferDefaults(DEMO_ACCOUNTS) : null;
+  const { flightNumber, oracle: oracleAddress } = withDemoDefaults({ flightNumber: flight, oracle }, defaults);
+
   const dep = zonedLocalToUtcSeconds(local, tz);
   const oddsBps = parseOdds(odds);
   const capWei = safeParseEther(cap);
   const depositWei = safeParseEther(deposit);
 
   const errors: string[] = [];
-  if (flight && !isValidFlightNumber(flight)) errors.push("Flight number must look like SQ8385 (IATA format).");
+  if (flightNumber && !isValidFlightNumber(flightNumber)) errors.push("Flight number must look like SQ8385 (IATA format).");
   if (dep !== null && dep - SALES_CUTOFF <= now) errors.push("Departure must be more than 12 hours from now.");
   if (odds && (oddsBps === null || oddsBps < MIN_ODDS_BPS || oddsBps > MAX_ODDS_BPS))
     errors.push("Odds must be above 1.00× and at most 100.00× (two decimals).");
   if (cap && (capWei === null || capWei === 0n)) errors.push("Cap must be a positive ETH amount.");
-  if (oracle && !isAddress(oracle)) errors.push("Oracle must be a valid address.");
+  if (oracleAddress && !isAddress(oracleAddress)) errors.push("Oracle must be a valid address.");
   if (depositWei === null) errors.push("Initial deposit must be an ETH amount (0 allowed).");
 
-  const complete = flight && dep !== null && oddsBps !== null && capWei && isAddress(oracle) && depositWei !== null;
+  const complete =
+    flightNumber && dep !== null && oddsBps !== null && capWei && isAddress(oracleAddress) && depositWei !== null;
   const valid = complete && errors.length === 0;
 
   return (
     <form className="stack card" onSubmit={(e) => e.preventDefault()}>
       <label>
         Flight number
-        <input value={flight} onChange={(e) => setFlight(e.target.value.toUpperCase())} placeholder="SQ8385" />
+        <input
+          value={flight}
+          onChange={(e) => setFlight(e.target.value.toUpperCase())}
+          placeholder={defaults ? `${defaults.flightNumber} (demo default)` : "SQ8385"}
+        />
       </label>
       <div className="row">
         <label>
@@ -133,8 +145,15 @@ function CreateOfferForm({ now, onDone }: { now: bigint; onDone: () => void }) {
       </label>
       <label>
         Oracle address
-        <input value={oracle} onChange={(e) => setOracle(e.target.value.trim())} placeholder="0x…" />
-        <span className="hint">The only address allowed to report this flight’s outcome. Its report is final.</span>
+        <input
+          value={oracle}
+          onChange={(e) => setOracle(e.target.value.trim())}
+          placeholder={defaults?.oracle ? `${defaults.oracle} (demo default: Oracle #2)` : "0x…"}
+        />
+        <span className="hint">
+          The only address allowed to report this flight’s outcome. Its report is final.
+          {defaults?.oracle && " Leave blank to use Oracle (#2)."}
+        </span>
       </label>
       <label>
         Initial collateral (ETH)
@@ -149,7 +168,7 @@ function CreateOfferForm({ now, onDone }: { now: bigint; onDone: () => void }) {
         disabled={!valid}
         call={{
           functionName: "createOffer",
-          args: [flight, dep ?? 0n, oddsBps ?? 0, capWei ?? 0n, oracle as `0x${string}`],
+          args: [flightNumber, dep ?? 0n, oddsBps ?? 0, capWei ?? 0n, oracleAddress as `0x${string}`],
           value: depositWei ?? 0n,
         }}
         onDone={onDone}
