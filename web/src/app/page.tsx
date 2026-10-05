@@ -7,6 +7,7 @@ import { PhaseBadge } from "@/components/Badges";
 import { Guard } from "@/components/Guard";
 import { OfferFacts } from "@/components/OfferFacts";
 import { TxButton } from "@/components/TxButton";
+import { useDemoMode } from "@/hooks/useDemoMode";
 import { useChainNow, useMyPolicies, useOffers } from "@/hooks/useFdi";
 import { checkPremium, maxPremium, phaseOf, utcDate, type Offer, type Policy } from "@/lib/domain";
 
@@ -75,6 +76,8 @@ function OfferList() {
 
 function OfferCard({ o, now, policy, onDone }: { o: Offer; now: bigint; policy?: Policy; onDone: () => void }) {
   const phase = phaseOf(o, now);
+  // Demo mode keeps the buy form after sales end, so the class sees the contract's revert.
+  const demo = useDemoMode();
   return (
     <div className="card">
       <h3>
@@ -84,7 +87,9 @@ function OfferCard({ o, now, policy, onDone }: { o: Offer; now: bigint; policy?:
         <PhaseBadge phase={phase} />
       </h3>
       <OfferFacts o={o} now={now} />
-      {phase === "Open" && <BuyForm o={o} now={now} policy={policy} onDone={onDone} />}
+      {(phase === "Open" || (demo && phase === "SalesEnded")) && (
+        <BuyForm o={o} now={now} policy={policy} onDone={onDone} sendClosed={demo} />
+      )}
       {phase === "Expirable" && (
         <div className="row">
           <TxButton className="secondary" call={{ functionName: "expire", args: [o.id] }} onDone={onDone}>
@@ -96,7 +101,19 @@ function OfferCard({ o, now, policy, onDone }: { o: Offer; now: bigint; policy?:
   );
 }
 
-function BuyForm({ o, now, policy, onDone }: { o: Offer; now: bigint; policy?: Policy; onDone: () => void }) {
+function BuyForm({
+  o,
+  now,
+  policy,
+  onDone,
+  sendClosed = false,
+}: {
+  o: Offer;
+  now: bigint;
+  policy?: Policy;
+  onDone: () => void;
+  sendClosed?: boolean;
+}) {
   const { address } = useAccount();
   const [input, setInput] = useState("");
   if (!address) return <p className="hint">Connect a wallet to buy.</p>;
@@ -117,6 +134,9 @@ function BuyForm({ o, now, policy, onDone }: { o: Offer; now: bigint; policy?: P
   }
   const check = premium >= 0n ? checkPremium(o, premium, now) : null;
   const max = maxPremium(o, now);
+  const closed = phaseOf(o, now) !== "Open";
+  // In demo mode a closed offer still sends, and the contract's revert reason is shown.
+  const canSend = !!check?.ok || (sendClosed && closed && premium > 0n);
 
   return (
     <div>
@@ -133,7 +153,7 @@ function BuyForm({ o, now, policy, onDone }: { o: Offer; now: bigint; policy?: P
         </button>
         <TxButton
           call={{ functionName: "buyPolicy", args: [o.id], value: premium > 0n ? premium : 0n }}
-          disabled={!check?.ok}
+          disabled={!canSend}
           onDone={() => {
             setInput("");
             onDone();
@@ -148,7 +168,9 @@ function BuyForm({ o, now, policy, onDone }: { o: Offer; now: bigint; policy?: P
           : check && premium > 0n
             ? check.ok
               ? `Payout if delayed > 30 min, cancelled or diverted: ${formatEther(check.payout)} ETH`
-              : check.reason
+              : sendClosed && closed
+                ? `${check.reason}. Demo: Buy still sends, to show the contract's revert.`
+                : check.reason
             : `Up to ${formatEther(max)} ETH`}
       </p>
     </div>
